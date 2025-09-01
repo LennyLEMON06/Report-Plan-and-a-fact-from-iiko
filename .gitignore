@@ -81,3 +81,5 @@ desktop.ini
 *.msi
 *.zip
 *.tar.gz
+
+.json
