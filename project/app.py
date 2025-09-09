@@ -105,13 +105,22 @@ def select_bases(bases):
         return keys
     
     try:
-        indices = [int(x.strip()) - 1 for x in selected.split(",")]
-        return [keys[i] for i in indices if 0 <= i < len(keys)]
-    except:
+        # Разбиваем ввод на числа и преобразуем в целые
+        indices = [int(x.strip()) for x in selected.split(',') if x.strip()]
+        
+        # Проверяем корректность номеров
+        invalid_indices = [i for i in indices if i < 1 or i > len(keys)]
+        if invalid_indices:
+            print(f"❌ Некорректные номера: {invalid_indices}")
+            return []
+        
+        # Возвращаем выбранные базы
+        return [keys[i-1] for i in indices]
+    except ValueError:
         print("❌ Неверный ввод")
         return []
 
-def create_excel_report(all_data, output_filename):
+def create_excel_report(all_data, output_filename, report_month, report_date):
     """Создание Excel отчета: все кассы на одном листе"""
     if not all_data:
         print("❌ Нет данных для создания отчета")
@@ -145,10 +154,23 @@ def create_excel_report(all_data, output_filename):
     ws['A1'].font = Font(bold=True, size=16)
     ws.merge_cells('A1:E1')
 
-    # Группируем данные по кассам
+    # Цвета для разных баз
+    base_colors = {
+        0: "E2EFDA",  # Зеленый
+        1: "FFEB9C",  # Желтый  
+        2: "C6E0B4",  # Светло-зеленый
+        3: "FFE699",  # Светло-желтый
+        4: "A9D08E",  # Зеленый
+        5: "F8CBAD",  # Оранжевый
+        6: "9CC2E5",  # Голубой
+        7: "D9E1F2",  # Светло-синий
+    }
+
+    # Заголовки для каждой кассы
     headers = ["День недели", "Дата", "План", "Факт", "% выполнения"]
     
     col_offset = 0
+    base_index = 0
     for cash_register in cash_registers:
         start_col = col_offset + 1
         end_col = col_offset + len(headers)
@@ -156,14 +178,20 @@ def create_excel_report(all_data, output_filename):
         ws.cell(row=2, column=start_col, value=cash_register)
         ws.cell(row=2, column=start_col).font = Font(bold=True)
         ws.cell(row=2, column=start_col).alignment = Alignment(horizontal='center')
-        ws.cell(row=2, column=start_col).fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
         
+        # Уникальный цвет для каждой базы
+        color_index = base_index % len(base_colors)
+        color = base_colors[color_index]
+        ws.cell(row=2, column=start_col).fill = PatternFill(start_color=color, end_color=color, fill_type="solid")
+        
+        # Заголовки столбцов
         for i, header in enumerate(headers):
-            ws.cell(row=3, column=col_offset + i + 1, value=header)
-            ws.cell(row=3, column=col_offset + i + 1).font = Font(bold=True)
-            ws.cell(row=3, column=col_offset + i + 1).fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
+            cell = ws.cell(row=3, column=col_offset + i + 1, value=header)
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
         
         col_offset += len(headers)
+        base_index += 1
 
     # Заполняем данные
     dates = sorted(df['OpenDate.Typed'].unique())
@@ -177,18 +205,27 @@ def create_excel_report(all_data, output_filename):
         for cash_register in cash_registers:
             ws.cell(row=current_row, column=col_offset + 1, value=day_of_week)
             ws.cell(row=current_row, column=col_offset + 2, value=formatted_date)
-            ws.cell(row=current_row, column=col_offset + 3, value="")
             
+            # План (берем из данных или 0 если нет)
             cash_data = df[(df['OpenDate.Typed'] == date) & (df['Store.Name'] == cash_register)]
+            plan_value = cash_data.iloc[0]['PlanValue'] if not cash_data.empty and 'PlanValue' in cash_data.iloc[0] else 0
+            ws.cell(row=current_row, column=col_offset + 3, value=plan_value)
+            
+            # Факт
             if not cash_data.empty:
                 fact_value = cash_data.iloc[0]['DishDiscountSumInt']
                 ws.cell(row=current_row, column=col_offset + 4, value=fact_value)
                 
+                # Процент выполнения
                 plan_col = get_column_letter(col_offset + 3)
                 fact_col = get_column_letter(col_offset + 4)
-                formula = f"=IF({plan_col}{current_row}<>0, {fact_col}{current_row}/{plan_col}{current_row}, 0)"
-                ws.cell(row=current_row, column=col_offset + 5, value=formula)
-                ws.cell(row=current_row, column=col_offset + 5).number_format = '0.00%'
+                if plan_value > 0:
+                    formula = f"={fact_col}{current_row}/{plan_col}{current_row}"
+                    ws.cell(row=current_row, column=col_offset + 5, value=formula)
+                    ws.cell(row=current_row, column=col_offset + 5).number_format = '0.00%'
+                else:
+                    ws.cell(row=current_row, column=col_offset + 5, value=0)
+                    ws.cell(row=current_row, column=col_offset + 5).number_format = '0.00%'
             
             col_offset += len(headers)
         
@@ -199,20 +236,28 @@ def create_excel_report(all_data, output_filename):
     ws.cell(row=total_row, column=1, value="ИТОГО")
     ws.cell(row=total_row, column=1).font = Font(bold=True)
     
+    # Дата выгрузки в столбце "Дата" для строки ИТОГО
+    current_date = datetime.now().strftime('%d.%m.%Y')
+    ws.cell(row=total_row, column=2, value=current_date)
+    ws.cell(row=total_row, column=2).font = Font(bold=True)
+    
     col_offset = 0
     for cash_register in cash_registers:
-        start_col = col_offset + 4
-        col_letter = get_column_letter(start_col)
-        ws.cell(row=total_row, column=start_col, value=f"=SUM({col_letter}4:{col_letter}{current_row-1})")
-        ws.cell(row=total_row, column=start_col).font = Font(bold=True)
+        # Сумма плана
+        plan_col = get_column_letter(col_offset + 3)
+        ws.cell(row=total_row, column=col_offset + 3, value=f"=SUM({plan_col}4:{plan_col}{current_row-1})")
+        ws.cell(row=total_row, column=col_offset + 3).font = Font(bold=True)
         
-        ws.cell(row=total_row, column=col_offset + 3, value="")
+        # Сумма факта
+        fact_col = get_column_letter(col_offset + 4)
+        ws.cell(row=total_row, column=col_offset + 4, value=f"=SUM({fact_col}4:{fact_col}{current_row-1})")
+        ws.cell(row=total_row, column=col_offset + 4).font = Font(bold=True)
         
-        percent_col = col_offset + 5
-        percent_letter = get_column_letter(percent_col)
-        ws.cell(row=total_row, column=percent_col, value=f"=AVERAGE({percent_letter}4:{percent_letter}{current_row-1})")
-        ws.cell(row=total_row, column=percent_col).number_format = '0.00%'
-        ws.cell(row=total_row, column=percent_col).font = Font(bold=True)
+        # Средний процент выполнения
+        percent_col = get_column_letter(col_offset + 5)
+        ws.cell(row=total_row, column=col_offset + 5, value=f"=AVERAGE({percent_col}4:{percent_col}{current_row-1})")
+        ws.cell(row=total_row, column=col_offset + 5).number_format = '0.00%'
+        ws.cell(row=total_row, column=col_offset + 5).font = Font(bold=True)
         
         col_offset += len(headers)
 
@@ -230,20 +275,31 @@ def create_excel_report(all_data, output_filename):
         for col in range(1, col_offset + 1):
             ws.cell(row=row, column=col).border = thin_border
 
-    # Условное форматирование
+    # Условное форматирование для процентов выполнения
     col_offset = 0
     for cash_register in cash_registers:
         percent_col = col_offset + 5
         percent_letter = get_column_letter(percent_col)
         percent_range = f"{percent_letter}4:{percent_letter}{current_row-1}"
 
-        rule = CellIsRule(
-            operator='greaterThan',
+        # Зеленый для >= 100%
+        rule_green = CellIsRule(
+            operator='greaterThanOrEqual',
             formula=['1'],
-            stopIfTrue=True,
-            fill=PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+            stopIfTrue=False,
+            fill=PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
         )
-        ws.conditional_formatting.add(percent_range, rule)
+        ws.conditional_formatting.add(percent_range, rule_green)
+        
+        # Красный для < 100%
+        rule_red = CellIsRule(
+            operator='lessThan',
+            formula=['1'],
+            stopIfTrue=False,
+            fill=PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+        )
+        ws.conditional_formatting.add(percent_range, rule_red)
+        
         col_offset += len(headers)
 
     # Сохраняем файл
@@ -268,7 +324,7 @@ def main():
 
     # Устанавливаем период
     year = 2025
-    month = 6
+    month = 9
     first_day = 1
     last_day = calendar.monthrange(year, month)[1]
     date_from = datetime(year, month, first_day)
@@ -294,12 +350,13 @@ def main():
         # Создаем папку для отчетов
         Path("reports").mkdir(exist_ok=True)
         
-        # Формируем имя файла
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        excel_filename = f"reports/report_plan_fact_{timestamp}.xlsx"
+        # Формируем имя файла в формате "Свод_План_Факт_09_01_09_2025"
+        current_date = datetime.now()
+        report_date_str = current_date.strftime("%d_%m_%Y")
+        excel_filename = f"reports/Свод_План_Факт_{month:02d}_{report_date_str}.xlsx"
         
         # Создаем отчет
-        create_excel_report(all_data, excel_filename)
+        create_excel_report(all_data, excel_filename, month, current_date)
         
         print(f"\n✅ Отчет создан: {excel_filename}")
     else:
