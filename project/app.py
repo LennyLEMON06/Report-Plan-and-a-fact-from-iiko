@@ -17,7 +17,7 @@ import time
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class IikoDataCollector:
-    def __init__(self, base_url, login="login", password="password"):
+    def __init__(self, base_url, login="angelinalina", password="092002"):
         self.base_url = base_url.strip()
         self.login = login
         self.password = password
@@ -146,6 +146,34 @@ def select_bases(bases):
         
         # Возвращаем выбранные базы
         return [keys[i-1] for i in indices]
+    except ValueError:
+        print("❌ Неверный ввод")
+        return []
+
+def select_sheets():
+    """Выбор листов для выгрузки"""
+    print("\nДоступные листы:")
+    print("1. Свод План-Факт")
+    print("2. План_факт наполняемость")
+    print("3. План_факт стоимость блюд")
+    print("4. Все листы")
+    
+    selected = input("\nВведите номера листов через запятую (например: 1,3) или выберите вариант (4 или 5): ").strip()
+    
+    if selected == "4":
+        return [1, 2, 3]  # Все листы
+    
+    try:
+        # Разбиваем ввод на числа и преобразуем в целые
+        indices = [int(x.strip()) for x in selected.split(',') if x.strip()]
+        
+        # Проверяем корректность номеров
+        invalid_indices = [i for i in indices if i < 1 or i > 3]
+        if invalid_indices:
+            print(f"❌ Некорректные номера листов: {invalid_indices}")
+            return []
+        
+        return indices
     except ValueError:
         print("❌ Неверный ввод")
         return []
@@ -643,8 +671,8 @@ def create_dish_price_report_sheet(wb, df, cash_registers, bases_config, average
         
         col_offset += len(headers)
 
-def create_excel_report(all_data, bases_config, output_filename, report_month, report_date, average_data_dict):
-    """Создание Excel отчета с тремя листами"""
+def create_excel_report(all_data, bases_config, output_filename, report_month, report_date, average_data_dict, selected_sheets):
+    """Создание Excel отчета с выбранными листами"""
     if not all_data:
         print("❌ Нет данных для создания отчета")
         return False
@@ -670,10 +698,13 @@ def create_excel_report(all_data, bases_config, output_filename, report_month, r
     while len(wb.sheetnames) > 0:
         del wb[wb.sheetnames[0]]
     
-    # Создаем три листа
-    create_main_report_sheet(wb, df, cash_registers)
-    create_occupancy_report_sheet(wb, df, cash_registers, bases_config, average_data_dict)
-    create_dish_price_report_sheet(wb, df, cash_registers, bases_config, average_data_dict)
+    # Создаем выбранные листы
+    if 1 in selected_sheets:
+        create_main_report_sheet(wb, df, cash_registers)
+    if 2 in selected_sheets:
+        create_occupancy_report_sheet(wb, df, cash_registers, bases_config, average_data_dict)
+    if 3 in selected_sheets:
+        create_dish_price_report_sheet(wb, df, cash_registers, bases_config, average_data_dict)
 
     # Сохраняем файл
     wb.save(output_filename)
@@ -693,6 +724,12 @@ def main():
     selected_bases = select_bases(bases)
     if not selected_bases:
         print("❌ Не выбрано ни одной базы")
+        return
+
+    # Выбираем листы
+    selected_sheets = select_sheets()
+    if not selected_sheets:
+        print("❌ Не выбрано ни одного листа")
         return
 
     # Устанавливаем период
@@ -738,7 +775,7 @@ def main():
         excel_filename = f"reports/Свод_План_Факт_{month:02d}_{report_date_str}_{timestamp}.xlsx"
         
         # Создаем отчет
-        create_excel_report(all_data, bases, excel_filename, month, current_date, average_data_dict)
+        create_excel_report(all_data, bases, excel_filename, month, current_date, average_data_dict, selected_sheets)
         
         print(f"\n✅ Отчет создан: {excel_filename}")
     else:
