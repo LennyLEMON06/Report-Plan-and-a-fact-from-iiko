@@ -5,8 +5,8 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.formatting.rule import CellIsRule
 from datetime import datetime
-import time
-from pathlib import Path
+import tkinter as tk
+
 
 # Класс или функции для создания отчетов
 class ReportGenerator:
@@ -14,11 +14,16 @@ class ReportGenerator:
         self.log_callback = log_callback
 
     def log_message(self, message):
-        """Функция для логирования, вызывает внешнюю функцию логирования, если задана"""
-        if self.log_callback:
-            self.log_callback(message)
+        """Добавление сообщения в лог"""
+        # Проверка наличия log_text перед использованием
+        if hasattr(self, 'log_text'):
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            self.log_text.insert(tk.END, f"[{timestamp}] {message}\n")
+            self.log_text.see(tk.END)
+            self.root.update_idletasks()
         else:
-            print(message) # fallback, если логгер не передан
+            # Если log_text не существует, выводим в консоль
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
 
     def create_main_report_sheet(self, wb, df, cash_registers):
         """Создание основного листа Свод План-Факт"""

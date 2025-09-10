@@ -10,7 +10,7 @@ from datetime import datetime
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class IikoDataCollector:
-    def __init__(self, base_url, login="angelinalina", password="092002"):
+    def __init__(self, base_url, login="login", password="password"):
         self.base_url = base_url.strip()
         self.login = login
         self.password = password
