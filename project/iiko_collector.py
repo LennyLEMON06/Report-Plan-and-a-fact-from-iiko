@@ -1,12 +1,12 @@
-# iiko_collector.py
+# iiko_collector.py — класс для взаимодействия с API iiko
+
 import requests
 import hashlib
+from datetime import timedelta, datetime
 import json
-import urllib3
 from pathlib import Path
-from datetime import datetime
+import urllib3
 
-# Отключение предупреждений о сертификатах
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class IikoDataCollector:
@@ -32,8 +32,7 @@ class IikoDataCollector:
                 self.token = response.text.strip()
                 return True
             return False
-        except Exception as e:
-            # print(f"Auth error: {e}") # Можно добавить логирование
+        except Exception:
             return False
 
     def get_report_data(self, preset_id, date_from, date_to, save_raw=False):
@@ -41,10 +40,13 @@ class IikoDataCollector:
         if not self.token and not self.auth():
             return None
         url = f"{self.base_url}/v2/reports/olap/byPresetId/{preset_id}"
+        
+        adjusted_date_to = date_to + timedelta(days=1)
+        
         params = {
             'key': self.token,
             'dateFrom': date_from.strftime('%Y-%m-%d'),
-            'dateTo': date_to.strftime('%Y-%m-%d')
+            'dateTo': adjusted_date_to.strftime('%Y-%m-%d')
         }
         try:
             response = self.session.get(url, params=params)
@@ -58,26 +60,5 @@ class IikoDataCollector:
                         json.dump(json_data, f, ensure_ascii=False, indent=2)
                 return json_data
             return None
-        except Exception as e:
-            # print(f"Get report data error: {e}") # Можно добавить логирование
-            return None
-
-    def get_average_report_data(self, average_id, date_from, date_to):
-        """Получение данных отчета по average_id"""
-        if not self.token and not self.auth():
-            return None
-        url = f"{self.base_url}/v2/reports/olap/byPresetId/{average_id}"
-        params = {
-            'key': self.token,
-            'dateFrom': date_from.strftime('%Y-%m-%d'),
-            'dateTo': date_to.strftime('%Y-%m-%d')
-        }
-        try:
-            response = self.session.get(url, params=params)
-            if response.status_code == 200:
-                return response.json()
-            else:
-                return None
-        except Exception as e:
-            # print(f"Get average report data error: {e}") # Можно добавить логирование
+        except Exception:
             return None

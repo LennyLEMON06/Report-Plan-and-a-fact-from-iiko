@@ -87,3 +87,5 @@ desktop.ini
 *.json
 *.xlsx
 *.spec
+
+config.py
